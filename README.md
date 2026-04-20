@@ -45,7 +45,7 @@ Please post in the Issues tab if you need any help with:
 | :---: | :---: | :---: |
 | 480M_leyolo_pieces.onnx | LeYOLO ONNX model| https://drive.google.com/file/d/1-80xp_nly9i6s3o0mF0mU9OZGEzUAlGj/view?usp=sharing |
 | 480M_leyolo_pieces.pt | LeYOLO pt model | https://drive.google.com/file/d/1L6PZbSdT-peCmiJGNwmgHJN5MTpfAM-0/view?usp=sharing |
-| pieces.tar.gz | Train/test data in YOLOv5 format | https://drive.google.com/file/d/1CrrINu11Wy8Cv1H4Q9DbcGqir3GPPO29/view?usp=sharing |
+| pieces.tar.gz | Train/test data in YOLOv5 format | https://drive.google.com/file/d/12-Y3AJckAsFiDTlhQV8R50AK5ilM0s_Z/view?usp=sharing |
 | Report | Weights & Biases report from the LeYOLO training run | https://api.wandb.ai/links/pbatch/g2rcvycv |
 
 ### Xcorners
