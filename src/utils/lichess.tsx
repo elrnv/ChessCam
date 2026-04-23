@@ -65,7 +65,7 @@ const fetchResponse = async (token: string, path: string, options: any = {}) => 
   const res: any = await window.fetch(`${lichessHost}${path}`, config);
   if (!res.ok) {
     const err = `${res.status} ${res.statusText}`;
-    alert(err);
+    console.error(err);
     throw err;
   }
   return res;
@@ -170,7 +170,7 @@ export const lichessPlayMove = (token: string, gameId: string, move: string) => 
   const options = {
     method: "POST"
   }
-  fetchResponse(token, path, options);
+  return fetchResponse(token, path, options);
 }
 
 export const lichessTrySetUser = async (navigate: NavigateFunction, dispatch: Dispatch<UnknownAction>) => {

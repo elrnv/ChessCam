@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { lichessPlayMove, lichessStreamGame } from "../../utils/lichess";
 import { Color } from "chessops/types";
 import { useDispatch } from "react-redux";
-import { gameSelect, gameUpdate, makeBoard, makeUpdatePayload } from "../../slices/gameSlice";
+import { gameSelect, gameUpdate, gameSetError, makeBoard, makeUpdatePayload } from "../../slices/gameSlice";
 import GamesButton from "./gamesButton";
 
 const PlaySidebar = ({ piecesModelRef, xcornersModelRef, videoRef, canvasRef, sidebarRef,
@@ -31,11 +31,15 @@ const PlaySidebar = ({ piecesModelRef, xcornersModelRef, videoRef, canvasRef, si
   useEffect(() => {
     const colorToMove = gameRef.current.fen.split(" ")[1];
     const lastMove = gameRef.current.lastMove;
-    if ((colorToMove === color) || (lastMove === "") || (gameId === undefined) || (color === undefined)) {
+    const fromOpponent = gameRef.current.fromOpponent;
+    if ((colorToMove === color) || (lastMove === "") || (gameId === undefined) || (color === undefined) || fromOpponent) {
       return;
     }
 
-    lichessPlayMove(token, gameId, lastMove);
+    lichessPlayMove(token, gameId, lastMove)
+      .catch((err: string) => {
+        dispatch(gameSetError(err));
+      });
   }, [gameRef.current])
 
   const streamGameCallback = async (response: any) => {
@@ -51,8 +55,8 @@ const PlaySidebar = ({ piecesModelRef, xcornersModelRef, videoRef, canvasRef, si
     }
 
     const board = makeBoard(gameRef.current);
-    board.move(lastMove);
-    const payload = makeUpdatePayload(board);
+    board.playUci(lastMove);
+    const payload = makeUpdatePayload(board, false, true);
     console.log("payload", payload);
     dispatch(gameUpdate(payload));
   }

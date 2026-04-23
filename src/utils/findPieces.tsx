@@ -129,7 +129,7 @@ export const getUpdate = (scoresTensor: tf.Tensor2D, squares: number[]) => {
 
   for (let i = 0; i < squares.length; i++) {
     const square = squares[i];
-    if (square == -1) {
+    if (typeof square !== 'number' || !Number.isInteger(square) || square < 0 || square >= 64) {
       continue;
     }
     for (let j = 0; j < 12; j++) {
