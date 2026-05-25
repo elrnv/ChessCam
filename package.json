@@ -18,6 +18,7 @@
     "@popperjs/core": "^2.11.8",
     "@react-hook/window-size": "^3.1.1",
     "@reduxjs/toolkit": "^2.2.7",
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "@tensorflow/tfjs-backend-webgl": "^4.22.0",
     "@tensorflow/tfjs-converter": "^4.22.0",
     "@tensorflow/tfjs-core": "^4.22.0",

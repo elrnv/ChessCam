@@ -23,7 +23,8 @@ interface ProcessedDetections {
 
 interface PiecesResult {
   pieces: number[][],
-  debug: string[]
+  debug: string[],
+  maxScore: number
 }
 
 const processBoxesAndScores = async (boxes: tf.Tensor2D, scores: tf.Tensor2D) => {
@@ -54,19 +55,20 @@ const runPiecesModel = async (videoRef: any, piecesModelRef: any): Promise<Piece
   const videoWidth: number = videoRef.current.videoWidth;
   const videoHeight: number = videoRef.current.videoHeight;
 
-  const { image4D, width, height, padding, roi } = getInput(videoRef);
+  const { image4D, width, height, padding, roi, inputStats } = getInput(videoRef, null, 12, true);
   const piecesPreds: tf.Tensor3D = piecesModelRef.current.predict(image4D);
   const boxesAndScores = getBoxesAndScores(piecesPreds, width, height, videoWidth, videoHeight, padding, roi);
   const processed = await processBoxesAndScores(boxesAndScores.boxes, boxesAndScores.scores);
 
   const debug = [
     `video ${videoWidth}x${videoHeight}, input ${width}x${height}`,
+    inputStats ? `input min ${inputStats.min.toFixed(3)}, mean ${inputStats.mean.toFixed(3)}, max ${inputStats.max.toFixed(3)}` : "input stats unavailable",
     `backend ${tf.getBackend()}, preds ${piecesPreds.shape.join("x")}`,
     `piece max ${processed.maxScore.toFixed(3)}, kept ${processed.kept}/${processed.candidates}`
   ];
 
   tf.dispose([piecesPreds, image4D]);
-  return { pieces: processed.detections, debug };
+  return { pieces: processed.detections, debug, maxScore: processed.maxScore };
 }
 
 const runXcornersModel = async (videoRef: any, xcornersModelRef: any, pieces: number[][]):
@@ -259,7 +261,17 @@ export const _findCorners = async (piecesModelRef: any, xcornersModelRef: any, v
     return;
   }
 
-  const { pieces, debug } = await runPiecesModel(videoRef, piecesModelRef);
+  let { pieces, debug, maxScore } = await runPiecesModel(videoRef, piecesModelRef);
+  if (tf.getBackend() === "webgl" && maxScore < 0.001) {
+    setText(["WebGL piece scores were zero", "Retrying with WASM"]);
+    await tf.setBackend("wasm");
+    await tf.ready();
+    const fallback = await runPiecesModel(videoRef, piecesModelRef);
+    pieces = fallback.pieces;
+    maxScore = fallback.maxScore;
+    debug = debug.concat(["Retried with WASM"], fallback.debug);
+  }
+
   const blackPieces = pieces.filter(x => (x[2] <= 5));
   const whitePieces = pieces.filter(x => (x[2] > 5));
   if ((blackPieces.length == 0) || (whitePieces.length == 0)) {

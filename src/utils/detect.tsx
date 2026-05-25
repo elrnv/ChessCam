@@ -1,6 +1,12 @@
 import { MODEL_WIDTH, MODEL_HEIGHT, MARKER_DIAMETER } from "./constants";
 import * as tf from "@tensorflow/tfjs-core";
 
+export interface InputStats {
+  min: number,
+  mean: number,
+  max: number
+}
+
 export const invalidVideo = (videoRef: any) => {
   if (videoRef.current === null) {
     return true;
@@ -49,8 +55,9 @@ export const getBbox = (points: number[][]) => {
   return bbox
 }
 
-export const getInput = (videoRef: any, keypoints: number[][] | null=null, paddingRatio: number=12): {
-  image4D: tf.Tensor4D, width: number, height: number, padding: number[], roi: number[]
+export const getInput = (videoRef: any, keypoints: number[][] | null=null, paddingRatio: number=12,
+  includeStats: boolean=false): {
+  image4D: tf.Tensor4D, width: number, height: number, padding: number[], roi: number[], inputStats: InputStats | null
 } => {
   let roi: number[];
   const videoWidth: number = videoRef.current.videoWidth;
@@ -125,7 +132,19 @@ export const getInput = (videoRef: any, keypoints: number[][] | null=null, paddi
 
     return [image4D, width, height, padding];
   });
-  return {image4D, width, height, padding, roi}
+  let inputStats: InputStats | null = null;
+  if (includeStats) {
+    const minTensor = tf.min(image4D);
+    const meanTensor = tf.mean(image4D);
+    const maxTensor = tf.max(image4D);
+    inputStats = {
+      min: minTensor.arraySync() as number,
+      mean: meanTensor.arraySync() as number,
+      max: maxTensor.arraySync() as number
+    };
+    tf.dispose([minTensor, meanTensor, maxTensor]);
+  }
+  return {image4D, width, height, padding, roi, inputStats}
 };
 
 export const getBoxesAndScores = (preds: tf.Tensor3D, width: number, height: number, 

@@ -1,5 +1,7 @@
 import * as tf from "@tensorflow/tfjs-core";
 import { loadGraphModel, GraphModel } from "@tensorflow/tfjs-converter";
+import { setWasmPaths } from "@tensorflow/tfjs-backend-wasm";
+import "@tensorflow/tfjs-backend-wasm";
 import { MODEL_HEIGHT, MODEL_WIDTH } from "../utils/constants";
 
 const LoadModels = async (piecesModelRef: any, xcornersModelRef: any) => {
@@ -7,10 +9,21 @@ const LoadModels = async (piecesModelRef: any, xcornersModelRef: any) => {
     return Promise.resolve();
   }
 
+  setWasmPaths("/tfjs-wasm/");
+  try {
+    await tf.setBackend("webgl");
+  } catch (err) {
+    console.warn("WebGL backend unavailable, using WASM", err);
+    await tf.setBackend("wasm");
+  }
   await tf.ready();
-  tf.env().set('WEBGL_EXP_CONV', true);
-  tf.env().set('WEBGL_PACK', false);
-  tf.env().set('ENGINE_COMPILE_ONLY', true);
+
+  const usingWebgl = tf.getBackend() === "webgl";
+  if (usingWebgl) {
+    tf.env().set('WEBGL_EXP_CONV', true);
+    tf.env().set('WEBGL_PACK', false);
+    tf.env().set('ENGINE_COMPILE_ONLY', true);
+  }
 
   try {
     const dummyInput: tf.Tensor<tf.Rank> = tf.zeros([1, MODEL_HEIGHT, MODEL_WIDTH, 3]);
@@ -23,15 +36,19 @@ const LoadModels = async (piecesModelRef: any, xcornersModelRef: any) => {
 
     tf.dispose([dummyInput, piecesOutput, xcornersOutput]);
     
-    const backend: any = tf.backend()
-    backend.checkCompileCompletion();
-    backend.getUniformLocations();
-    tf.env().set('ENGINE_COMPILE_ONLY', false);
+    if (usingWebgl) {
+      const backend: any = tf.backend()
+      backend.checkCompileCompletion();
+      backend.getUniformLocations();
+      tf.env().set('ENGINE_COMPILE_ONLY', false);
+    }
 
     piecesModelRef.current = piecesModel;
     xcornersModelRef.current = xcornersModel;
   } finally {
-    tf.env().set('ENGINE_COMPILE_ONLY', false);
+    if (usingWebgl) {
+      tf.env().set('ENGINE_COMPILE_ONLY', false);
+    }
   }
 };
 
