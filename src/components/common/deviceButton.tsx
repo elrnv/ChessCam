@@ -5,6 +5,15 @@ const DeviceButton = ({ videoRef }: {videoRef: any }) => {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [device, setDevice] = useState<MediaDeviceInfo | null>(null);
 
+  const refreshDevices = async () => {
+    try {
+      const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+      setDevices(mediaDevices.filter((device: MediaDeviceInfo) => device.kind === "videoinput"));
+    } catch (err: any) {
+      console.error(`${err.name}: ${err.message}`);
+    }
+  }
+
   const handleClick = async (e: any, newDevice: MediaDeviceInfo) => {
     e.preventDefault();
 
@@ -17,30 +26,22 @@ const DeviceButton = ({ videoRef }: {videoRef: any }) => {
     const constraints: any = {...MEDIA_CONSTRAINTS}
     constraints["video"]["deviceId"] = newDevice.deviceId
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    videoRef.current.srcObject?.getTracks().forEach((track: MediaStreamTrack) => track.stop());
     videoRef.current.srcObject = stream;
   }
 
   useEffect(() => {
-    const newDevices: MediaDeviceInfo[] = [];
-    navigator.mediaDevices
-    .enumerateDevices()
-    .then((devices) => {
-      devices.forEach((device: MediaDeviceInfo) => {
-        if (device.kind != "videoinput") {
-          return;
-        }
-        newDevices.push(device);
-      });
-      setDevices(newDevices);
-    })
-    .catch((err) => {
-      console.error(`${err.name}: ${err.message}`);
-    });
+    refreshDevices();
+    navigator.mediaDevices.addEventListener("devicechange", refreshDevices);
+
+    return () => {
+      navigator.mediaDevices.removeEventListener("devicechange", refreshDevices);
+    }
   }, [])
 
   return (
     <div className="dropdown">
-      <button className="btn btn-dark btn-sm btn-outline-light dropdown-toggle w-100" id="deviceButton" data-bs-toggle="dropdown" aria-expanded="false">
+      <button onClick={refreshDevices} className="btn btn-dark btn-sm btn-outline-light dropdown-toggle w-100" id="deviceButton" data-bs-toggle="dropdown" aria-expanded="false">
       {(device === null) ? "Select a Device": `Device: ${device.label.split("(")[0]}`}
       </button>
       <ul className="dropdown-menu" aria-labelledby="deviceButton">
