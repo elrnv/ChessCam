@@ -7,7 +7,7 @@ import { userSelect } from "./slices/userSlice";
 import { useDispatch } from "react-redux";
 import { lichessTrySetUser } from "./utils/lichess";
 import { UnknownAction } from "@reduxjs/toolkit";
-import { Toast } from "./components/common";
+import { Toast, VersionBadge } from "./components/common";
 
 const App = () => {
   const dispatch: Dispatch<UnknownAction> = useDispatch();
@@ -33,6 +33,7 @@ const App = () => {
     <>
       <Toast />
       {!loading && <Outlet context={modelRefs} />}
+      <VersionBadge />
     </>
   );
 };
