@@ -27,6 +27,21 @@ interface PiecesResult {
   maxScore: number
 }
 
+interface PieceScan {
+  label: string,
+  roi: number[] | null
+}
+
+interface PieceScanResult extends ProcessedDetections {
+  inputStats: string | null,
+  inputSize: string,
+  label: string,
+  predsShape: string
+}
+
+const MIN_FAST_PATH_PIECES = 8;
+const MERGE_RADIUS = 8;
+
 const processBoxesAndScores = async (boxes: tf.Tensor2D, scores: tf.Tensor2D) => {
   const maxScores: tf.Tensor1D = tf.max(scores, 1);
   const argmaxScores: tf.Tensor1D = tf.argMax(scores, 1);
@@ -35,8 +50,9 @@ const processBoxesAndScores = async (boxes: tf.Tensor2D, scores: tf.Tensor2D) =>
   const nms: tf.Tensor1D = await tf.image.nonMaxSuppressionAsync(boxes, maxScores, 100, 0.3, 0.1);
   const resTensor: tf.Tensor2D = tf.tidy(() => {
     const centers: tf.Tensor2D = getCenters(tf.gather(boxes, nms, 0));
-    const cls: tf.Tensor2D = tf.expandDims(tf.gather(argmaxScores, nms, 0), 1);
-    const res: tf.Tensor2D = tf.concat([centers, cls], 1);
+    const cls: tf.Tensor2D = tf.expandDims(tf.cast(tf.gather(argmaxScores, nms, 0), "float32"), 1);
+    const confidence: tf.Tensor2D = tf.expandDims(tf.gather(maxScores, nms, 0), 1);
+    const res: tf.Tensor2D = tf.concat([centers, cls, confidence], 1);
     return res;
   });
   const res: number[][] = resTensor.arraySync();
@@ -51,24 +67,132 @@ const processBoxesAndScores = async (boxes: tf.Tensor2D, scores: tf.Tensor2D) =>
   return result;
 }
 
-const runPiecesModel = async (videoRef: any, piecesModelRef: any): Promise<PiecesResult> => {
+const hasEnoughPieces = (pieces: number[][]) => {
+  const blackPieces = pieces.filter(x => (x[2] <= 5));
+  const whitePieces = pieces.filter(x => (x[2] > 5));
+  return pieces.length >= MIN_FAST_PATH_PIECES && blackPieces.length > 0 && whitePieces.length > 0;
+}
+
+const makeZoomRoi = (videoWidth: number, videoHeight: number, centerX: number, centerY: number, zoom: number) => {
+  const roiWidth = videoWidth / zoom;
+  const roiHeight = videoHeight / zoom;
+  let x1 = (videoWidth * centerX) - (roiWidth / 2);
+  let y1 = (videoHeight * centerY) - (roiHeight / 2);
+  let x2 = x1 + roiWidth;
+  let y2 = y1 + roiHeight;
+
+  if (x1 < 0) {
+    x2 -= x1;
+    x1 = 0;
+  }
+  if (y1 < 0) {
+    y2 -= y1;
+    y1 = 0;
+  }
+  if (x2 > videoWidth) {
+    x1 -= x2 - videoWidth;
+    x2 = videoWidth;
+  }
+  if (y2 > videoHeight) {
+    y1 -= y2 - videoHeight;
+    y2 = videoHeight;
+  }
+
+  return [
+    Math.round(Math.max(0, x1)),
+    Math.round(Math.max(0, y1)),
+    Math.round(Math.min(videoWidth, x2)),
+    Math.round(Math.min(videoHeight, y2))
+  ];
+}
+
+const getPieceScans = (videoWidth: number, videoHeight: number): PieceScan[] => {
+  const tileCenters = [
+    [0.32, 0.32],
+    [0.68, 0.32],
+    [0.32, 0.68],
+    [0.68, 0.68]
+  ];
+  const tileScans = tileCenters.map(([x, y], i) => ({
+    label: `tile ${i + 1}`,
+    roi: makeZoomRoi(videoWidth, videoHeight, x, y, 1.75)
+  }));
+
+  return [
+    {label: "full", roi: null},
+    {label: "center 1.5x", roi: makeZoomRoi(videoWidth, videoHeight, 0.5, 0.5, 1.5)},
+    {label: "center 2.2x", roi: makeZoomRoi(videoWidth, videoHeight, 0.5, 0.5, 2.2)},
+    ...tileScans
+  ];
+}
+
+const detectionDistance = (a: number[], b: number[]) => {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  return Math.sqrt((dx * dx) + (dy * dy));
+}
+
+const mergeDetections = (detections: number[][]) => {
+  const sortedDetections = detections.slice().sort((a, b) => (b[3] ?? 0) - (a[3] ?? 0));
+  const merged: number[][] = [];
+  sortedDetections.forEach(detection => {
+    const isDuplicate = merged.some(x => x[2] === detection[2] && detectionDistance(x, detection) < MERGE_RADIUS);
+    if (!isDuplicate) {
+      merged.push(detection);
+    }
+  });
+  return merged;
+}
+
+const runPieceScan = async (videoRef: any, piecesModelRef: any, scan: PieceScan): Promise<PieceScanResult> => {
   const videoWidth: number = videoRef.current.videoWidth;
   const videoHeight: number = videoRef.current.videoHeight;
 
-  const { image4D, width, height, padding, roi, inputStats } = getInput(videoRef, null, 12, true);
+  const { image4D, width, height, padding, roi, inputStats } = getInput(videoRef, null, 12, true, scan.roi);
   const piecesPreds: tf.Tensor3D = piecesModelRef.current.predict(image4D);
   const boxesAndScores = getBoxesAndScores(piecesPreds, width, height, videoWidth, videoHeight, padding, roi);
   const processed = await processBoxesAndScores(boxesAndScores.boxes, boxesAndScores.scores);
 
+  const result = {
+    ...processed,
+    inputStats: inputStats ? `input min ${inputStats.min.toFixed(3)}, mean ${inputStats.mean.toFixed(3)}, max ${inputStats.max.toFixed(3)}` : null,
+    inputSize: `${width}x${height}`,
+    label: scan.label,
+    predsShape: piecesPreds.shape.join("x")
+  };
+  tf.dispose([piecesPreds, image4D]);
+  return result;
+}
+
+const runPiecesModel = async (videoRef: any, piecesModelRef: any): Promise<PiecesResult> => {
+  const videoWidth: number = videoRef.current.videoWidth;
+  const videoHeight: number = videoRef.current.videoHeight;
+  const scans = getPieceScans(videoWidth, videoHeight);
+  const scanResults: PieceScanResult[] = [];
+  let detections: number[][] = [];
+  let pieces: number[][] = [];
+  let maxScore = 0;
+
+  for (let i = 0; i < scans.length; i++) {
+    const scanResult = await runPieceScan(videoRef, piecesModelRef, scans[i]);
+    scanResults.push(scanResult);
+    detections = detections.concat(scanResult.detections);
+    pieces = mergeDetections(detections);
+    maxScore = Math.max(maxScore, scanResult.maxScore);
+
+    if (i === 0 && hasEnoughPieces(pieces)) {
+      break;
+    }
+  }
+
   const debug = [
-    `video ${videoWidth}x${videoHeight}, input ${width}x${height}`,
-    inputStats ? `input min ${inputStats.min.toFixed(3)}, mean ${inputStats.mean.toFixed(3)}, max ${inputStats.max.toFixed(3)}` : "input stats unavailable",
-    `backend ${tf.getBackend()}, preds ${piecesPreds.shape.join("x")}`,
-    `piece max ${processed.maxScore.toFixed(3)}, kept ${processed.kept}/${processed.candidates}`
+    `video ${videoWidth}x${videoHeight}, backend ${tf.getBackend()}, preds ${scanResults[0]?.predsShape ?? "unknown"}`,
+    scanResults[0]?.inputStats ?? "input stats unavailable",
+    ...scanResults.map(x => `${x.label} input ${x.inputSize}, piece max ${x.maxScore.toFixed(3)}, kept ${x.kept}/${x.candidates}`),
+    `merged pieces ${pieces.length}/${detections.length}`
   ];
 
-  tf.dispose([piecesPreds, image4D]);
-  return { pieces: processed.detections, debug, maxScore: processed.maxScore };
+  return { pieces, debug, maxScore };
 }
 
 const runXcornersModel = async (videoRef: any, xcornersModelRef: any, pieces: number[][]):
@@ -261,6 +385,7 @@ export const _findCorners = async (piecesModelRef: any, xcornersModelRef: any, v
     return;
   }
 
+  setText(["Scanning board"]);
   let { pieces, debug, maxScore } = await runPiecesModel(videoRef, piecesModelRef);
   if (tf.getBackend() === "webgl" && maxScore < 0.001) {
     setText(["WebGL piece scores were zero", "Retrying with WASM"]);
@@ -275,7 +400,7 @@ export const _findCorners = async (piecesModelRef: any, xcornersModelRef: any, v
   const blackPieces = pieces.filter(x => (x[2] <= 5));
   const whitePieces = pieces.filter(x => (x[2] > 5));
   if ((blackPieces.length == 0) || (whitePieces.length == 0)) {
-    setText(["No pieces to label corners", ...debug]);
+    setText(["No pieces to label corners", `Detected ${pieces.length} pieces`, ...debug]);
     return;
   }
 

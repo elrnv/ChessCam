@@ -55,14 +55,24 @@ export const getBbox = (points: number[][]) => {
   return bbox
 }
 
+const getSafeRoi = (roi: number[], videoWidth: number, videoHeight: number): number[] => {
+  const x1 = Math.max(0, Math.min(Math.floor(roi[0]), videoWidth - 1));
+  const y1 = Math.max(0, Math.min(Math.floor(roi[1]), videoHeight - 1));
+  const x2 = Math.max(x1 + 1, Math.min(Math.ceil(roi[2]), videoWidth));
+  const y2 = Math.max(y1 + 1, Math.min(Math.ceil(roi[3]), videoHeight));
+  return [x1, y1, x2, y2];
+}
+
 export const getInput = (videoRef: any, keypoints: number[][] | null=null, paddingRatio: number=12,
-  includeStats: boolean=false): {
+  includeStats: boolean=false, sourceRoi: number[] | null=null): {
   image4D: tf.Tensor4D, width: number, height: number, padding: number[], roi: number[], inputStats: InputStats | null
 } => {
   let roi: number[];
   const videoWidth: number = videoRef.current.videoWidth;
   const videoHeight: number = videoRef.current.videoHeight;
-  if (keypoints !== null) {
+  if (sourceRoi !== null) {
+    roi = getSafeRoi(sourceRoi, videoWidth, videoHeight);
+  } else if (keypoints !== null) {
     const bbox = getBbox(keypoints);
     let paddingLeft: number = Math.floor(bbox.width / paddingRatio);
     let paddingRight: number = Math.floor(bbox.width / paddingRatio);
