@@ -31,12 +31,11 @@ const DeviceButton = ({ videoRef }: {videoRef: any }) => {
         }
         newDevices.push(device);
       });
+      setDevices(newDevices);
     })
     .catch((err) => {
       console.error(`${err.name}: ${err.message}`);
     });
-
-    setDevices(newDevices);
   }, [])
 
   return (

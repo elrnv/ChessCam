@@ -71,7 +71,13 @@ const VideoAndSidebar = ({ mode }: { mode: Mode }) => {
   }, [corners])
 
   useEffect(() => {
-    LoadModels(context.piecesModelRef, context.xcornersModelRef);
+    setText(["Loading models"]);
+    LoadModels(context.piecesModelRef, context.xcornersModelRef)
+      .then(() => setText(["Models ready"]))
+      .catch((err: Error) => {
+        console.error(err);
+        setText(["Model load failed", err.message]);
+      });
     dispatch(cornersReset());
     dispatch(gameResetStart());
     dispatch(gameResetMoves());

@@ -2,16 +2,17 @@ import * as tf from "@tensorflow/tfjs-core";
 import { loadGraphModel, GraphModel } from "@tensorflow/tfjs-converter";
 import { MODEL_HEIGHT, MODEL_WIDTH } from "../utils/constants";
 
-const LoadModels = (piecesModelRef: any, xcornersModelRef: any) => {
+const LoadModels = async (piecesModelRef: any, xcornersModelRef: any) => {
   if ((piecesModelRef.current !== undefined) && (xcornersModelRef.current !== undefined)) {
-    return;
+    return Promise.resolve();
   }
 
-  tf.ready().then(async () => {
-    tf.env().set('WEBGL_EXP_CONV', true);
-    tf.env().set('WEBGL_PACK', false);
-    tf.env().set('ENGINE_COMPILE_ONLY', true);
+  await tf.ready();
+  tf.env().set('WEBGL_EXP_CONV', true);
+  tf.env().set('WEBGL_PACK', false);
+  tf.env().set('ENGINE_COMPILE_ONLY', true);
 
+  try {
     const dummyInput: tf.Tensor<tf.Rank> = tf.zeros([1, MODEL_HEIGHT, MODEL_WIDTH, 3]);
 
     const piecesModel: GraphModel = await loadGraphModel("480M_pieces_float16/model.json");
@@ -29,7 +30,9 @@ const LoadModels = (piecesModelRef: any, xcornersModelRef: any) => {
 
     piecesModelRef.current = piecesModel;
     xcornersModelRef.current = xcornersModel;
-  })
+  } finally {
+    tf.env().set('ENGINE_COMPILE_ONLY', false);
+  }
 };
 
 export default LoadModels;

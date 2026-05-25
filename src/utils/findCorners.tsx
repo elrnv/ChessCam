@@ -229,6 +229,7 @@ const calculateKeypoints = (blackPieces: number[][], whitePieces: number[][], co
 export const _findCorners = async (piecesModelRef: any, xcornersModelRef: any, videoRef: any,
   canvasRef: any, dispatch: any, setText: any) => {
   if (invalidVideo(videoRef)) {
+    setText(["Camera not ready"]);
     return;
   }
 

@@ -9,7 +9,17 @@ const CornersButton = ({ piecesModelRef, xcornersModelRef, videoRef, canvasRef, 
   const handleClick = (e: any) => {
     e.preventDefault();
 
-    findCorners(piecesModelRef, xcornersModelRef, videoRef, canvasRef, dispatch, setText);
+    if ((piecesModelRef.current === undefined) || (xcornersModelRef.current === undefined)) {
+      setText(["Still loading models"]);
+      return;
+    }
+
+    setText(["Finding corners"]);
+    findCorners(piecesModelRef, xcornersModelRef, videoRef, canvasRef, dispatch, setText)
+      .catch((err: Error) => {
+        console.error(err);
+        setText(["Find corners failed", err.message]);
+      });
   }
 
   return (
