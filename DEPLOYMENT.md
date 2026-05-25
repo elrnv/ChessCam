@@ -58,7 +58,7 @@ docker compose up -d --build
 Open:
 
 ```text
-http://localhost:8080
+http://localhost:8001
 ```
 
 This is enough for desktop testing. Phone camera access requires a secure context, so use HTTPS for real mobile use.
