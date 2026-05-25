@@ -71,23 +71,18 @@ const fetchResponse = async (token: string, path: string, options: any = {}) => 
   return res;
 };
 
-const setBroadcastlessStudies = async (token: string, username: string, setStudies: any, broadcasts: any) => {
+const setBroadcastlessStudies = async (token: string, username: string, setStudies: any) => {
   const path = `/api/study/by/${username}`;
-
-  const broadcastIds = broadcasts.map((x: any) => x.id);
-
   const studies: Study[] = [];
-  fetchResponse(token, path)
-    .then(readStream(async (response: any) => {
-      const id_ = response.id;
-      if (!(broadcastIds.includes(id_))) {
-        studies.push({
-          "id": id_,
-          "name": response.name
-        });
-      }
-    }))
-    .then(() => setStudies(studies));
+
+  const response = await fetchResponse(token, path);
+  await readStream(async (response: any) => {
+    studies.push({
+      "id": response.id,
+      "name": response.name
+    });
+  })(response);
+  setStudies(studies);
 }
 
 export const lichessLogin = () => {
@@ -106,23 +101,28 @@ export const lichessGetAccount = (token: string) => {
   return account;
 }
 
-export const lichessSetStudies = (token: string, setStudies: any, username: string, onlyBroadcasts: boolean) => {
-  const path = `/api/broadcast/my-rounds`;
+export const lichessSetStudies = async (token: string, setStudies: any, username: string, onlyBroadcasts: boolean) => {
+  if (token === "") {
+    throw new Error("Log in to Lichess");
+  }
+
+  if (!onlyBroadcasts) {
+    if (username === "") {
+      throw new Error("Lichess username missing");
+    }
+    await setBroadcastlessStudies(token, username, setStudies);
+    return;
+  }
+
   const broadcasts: Study[] = [];
-  fetchResponse(token, path)
-    .then(readStream(async (response: any) => {
+  const response = await fetchResponse(token, "/api/broadcast/my-rounds");
+  await readStream(async (response: any) => {
       broadcasts.push({
         "id": response.round.id,
         "name": response.round.name
       });
-    }))
-    .then(() => {
-      if (onlyBroadcasts) {
-        setStudies(broadcasts);
-      } else {
-        setBroadcastlessStudies(token, username, setStudies, broadcasts);
-      }
-    });
+  })(response);
+  setStudies(broadcasts);
 }
 
 export const lichessImportPgn = (token: string, pgn: string) => {
