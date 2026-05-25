@@ -4,17 +4,23 @@ import { setWasmPaths } from "@tensorflow/tfjs-backend-wasm";
 import "@tensorflow/tfjs-backend-wasm";
 import { MODEL_HEIGHT, MODEL_WIDTH } from "../utils/constants";
 
+const prefersWasm = () => /Android/i.test(navigator.userAgent);
+
 const LoadModels = async (piecesModelRef: any, xcornersModelRef: any) => {
   if ((piecesModelRef.current !== undefined) && (xcornersModelRef.current !== undefined)) {
     return Promise.resolve();
   }
 
   setWasmPaths("/tfjs-wasm/");
-  try {
-    await tf.setBackend("webgl");
-  } catch (err) {
-    console.warn("WebGL backend unavailable, using WASM", err);
+  if (prefersWasm()) {
     await tf.setBackend("wasm");
+  } else {
+    try {
+      await tf.setBackend("webgl");
+    } catch (err) {
+      console.warn("WebGL backend unavailable, using WASM", err);
+      await tf.setBackend("wasm");
+    }
   }
   await tf.ready();
 

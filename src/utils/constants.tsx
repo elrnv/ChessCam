@@ -61,7 +61,10 @@ export const MEDIA_CONSTRAINTS: any = {
       "ideal": "environment"
     },
     "width": {
-      "ideal": 640
+      "ideal": 1280
+    },
+    "height": {
+      "ideal": 720
     },
     "aspectRatio": MEDIA_ASPECT_RATIO,
     "resizeMode": "none"
