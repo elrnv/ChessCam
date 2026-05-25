@@ -14,9 +14,23 @@ const y: number[] = Array.from({ length: 7 }, (_, i) => i);
 const GRID: number[][] = y.map(yy => x.map(xx => [xx, yy])).flat();
 const IDEAL_QUAD: number[][] = [[0, 1], [1, 1], [1, 0], [0, 0]];
 
+interface ProcessedDetections {
+  detections: number[][],
+  maxScore: number,
+  kept: number,
+  candidates: number
+}
+
+interface PiecesResult {
+  pieces: number[][],
+  debug: string[]
+}
+
 const processBoxesAndScores = async (boxes: tf.Tensor2D, scores: tf.Tensor2D) => {
   const maxScores: tf.Tensor1D = tf.max(scores, 1);
   const argmaxScores: tf.Tensor1D = tf.argMax(scores, 1);
+  const maxScoreTensor: tf.Tensor = tf.max(maxScores);
+  const maxScore: number = maxScoreTensor.arraySync() as number;
   const nms: tf.Tensor1D = await tf.image.nonMaxSuppressionAsync(boxes, maxScores, 100, 0.3, 0.1);
   const resTensor: tf.Tensor2D = tf.tidy(() => {
     const centers: tf.Tensor2D = getCenters(tf.gather(boxes, nms, 0));
@@ -25,22 +39,34 @@ const processBoxesAndScores = async (boxes: tf.Tensor2D, scores: tf.Tensor2D) =>
     return res;
   });
   const res: number[][] = resTensor.arraySync();
+  const result: ProcessedDetections = {
+    detections: res,
+    maxScore,
+    kept: nms.shape[0],
+    candidates: maxScores.shape[0]
+  };
 
-  tf.dispose([nms, resTensor, boxes, scores, argmaxScores, maxScores]);
-  return res;
+  tf.dispose([nms, resTensor, boxes, scores, argmaxScores, maxScores, maxScoreTensor]);
+  return result;
 }
 
-const runPiecesModel = async (videoRef: any, piecesModelRef: any): Promise<number[][]> => {
+const runPiecesModel = async (videoRef: any, piecesModelRef: any): Promise<PiecesResult> => {
   const videoWidth: number = videoRef.current.videoWidth;
   const videoHeight: number = videoRef.current.videoHeight;
 
   const { image4D, width, height, padding, roi } = getInput(videoRef);
   const piecesPreds: tf.Tensor3D = piecesModelRef.current.predict(image4D);
   const boxesAndScores = getBoxesAndScores(piecesPreds, width, height, videoWidth, videoHeight, padding, roi);
-  const pieces: number[][] = await processBoxesAndScores(boxesAndScores.boxes, boxesAndScores.scores);
+  const processed = await processBoxesAndScores(boxesAndScores.boxes, boxesAndScores.scores);
 
-  tf.dispose([piecesPreds, image4D, boxesAndScores]);
-  return pieces;
+  const debug = [
+    `video ${videoWidth}x${videoHeight}, input ${width}x${height}`,
+    `backend ${tf.getBackend()}, preds ${piecesPreds.shape.join("x")}`,
+    `piece max ${processed.maxScore.toFixed(3)}, kept ${processed.kept}/${processed.candidates}`
+  ];
+
+  tf.dispose([piecesPreds, image4D]);
+  return { pieces: processed.detections, debug };
 }
 
 const runXcornersModel = async (videoRef: any, xcornersModelRef: any, pieces: number[][]):
@@ -54,7 +80,7 @@ const runXcornersModel = async (videoRef: any, xcornersModelRef: any, pieces: nu
   const boxesAndScores = getBoxesAndScores(xcornersPreds, width, height, videoWidth, videoHeight, padding, roi);
   tf.dispose([xcornersPreds, image4D]);
 
-  let xCorners: number[][] = await processBoxesAndScores(boxesAndScores.boxes, boxesAndScores.scores);
+  let xCorners: number[][] = (await processBoxesAndScores(boxesAndScores.boxes, boxesAndScores.scores)).detections;
   xCorners = xCorners.map(x => [x[0], x[1]]);
   return xCorners;
 }
@@ -233,11 +259,11 @@ export const _findCorners = async (piecesModelRef: any, xcornersModelRef: any, v
     return;
   }
 
-  const pieces = await runPiecesModel(videoRef, piecesModelRef);
+  const { pieces, debug } = await runPiecesModel(videoRef, piecesModelRef);
   const blackPieces = pieces.filter(x => (x[2] <= 5));
   const whitePieces = pieces.filter(x => (x[2] > 5));
   if ((blackPieces.length == 0) || (whitePieces.length == 0)) {
-    setText(["No pieces to label corners"]);
+    setText(["No pieces to label corners", ...debug]);
     return;
   }
 
