@@ -1,0 +1,32 @@
+services:
+  chesscam:
+    build:
+      context: .
+      args:
+        VITE_LICHESS_CLIENT_ID: ${VITE_LICHESS_CLIENT_ID:-camera-chess-self-hosted}
+        VITE_LICHESS_HOST: ${VITE_LICHESS_HOST:-https://lichess.org}
+    image: camera-chess-web:local
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+
+  caddy:
+    image: caddy:2-alpine
+    profiles:
+      - tls
+    restart: unless-stopped
+    depends_on:
+      - chesscam
+    environment:
+      CHESSCAM_SITE_ADDRESS: ${CHESSCAM_SITE_ADDRESS:-localhost}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

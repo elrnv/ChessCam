@@ -1,0 +1,4 @@
+{$CHESSCAM_SITE_ADDRESS:localhost} {
+  encode zstd gzip
+  reverse_proxy chesscam:80
+}

@@ -5,9 +5,9 @@ import { UnknownAction } from '@reduxjs/toolkit';
 import { NavigateFunction } from 'react-router-dom';
 import { Study } from '../types';
 
-const lichessHost = 'https://lichess.org';
+const lichessHost = import.meta.env.VITE_LICHESS_HOST || 'https://lichess.org';
 const scopes = ["study:write", "study:read", "challenge:read", "bot:play", "board:play"];
-const clientId = 'lichess-api-demo';
+const clientId = import.meta.env.VITE_LICHESS_CLIENT_ID || 'camera-chess-self-hosted';
 const clientUrl = `${location.protocol}//${location.host}/`;
 
 const getOauth = () => {

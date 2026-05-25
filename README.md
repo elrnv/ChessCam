@@ -20,6 +20,10 @@ Do you have ideas, bugs to report or training footage? Join our [Discord Server]
 
 </div>
 
+## Self-hosting
+
+This repository can be deployed as a static PWA. See [DEPLOYMENT.md](DEPLOYMENT.md) for the Docker Compose setup, HTTPS notes for mobile camera access, and the Lichess integration workflow.
+
 ## Demo
 [<img src="https://raw.githubusercontent.com/wiki/Pbatch/CameraChessWeb/images/thumbnail.png" width="100%">](https://youtu.be/AAs4EX372bc)
 
