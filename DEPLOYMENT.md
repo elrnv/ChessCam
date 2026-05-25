@@ -43,16 +43,15 @@ For deployment you need Docker with the Compose plugin on the server. The Docker
 
 Lichess supports public PKCE clients, so you do not need a client secret. Set a unique client id for your deployment:
 
-```bash
-export VITE_LICHESS_CLIENT_ID="your-domain-camera-chess"
-```
+Set `VITE_LICHESS_CLIENT_ID` in `.env`. Docker Compose reads `.env` and passes it into the Docker build as a build argument. The Dockerfile consumes that build argument but does not read `.env` directly. Vite embeds these values at build time, so rebuild the image after changing them.
 
 The default Lichess host is `https://lichess.org`. You normally do not need to change it.
 
 ## Local Server Test
 
 ```bash
-docker compose up -d --build
+cp .env.example .env
+docker compose --env-file .env up -d --build
 ```
 
 Open:
@@ -61,19 +60,28 @@ Open:
 http://localhost:8001
 ```
 
-This is enough for desktop testing. Phone camera access requires a secure context, so use HTTPS for real mobile use.
+This is enough for desktop testing from the server itself. By default, Compose binds the app to `127.0.0.1:8001` so it is ready for a host reverse proxy and is not exposed directly to the public internet. Phone camera access requires HTTPS for real mobile use.
 
 ## HTTPS Deployment
 
-Point a domain at your server, then run:
+Point a domain at your server, then run the app container:
 
 ```bash
 cp .env.example .env
-# Edit .env so CHESSCAM_SITE_ADDRESS and VITE_LICHESS_CLIENT_ID match your domain.
-docker compose --profile tls up -d --build
+# Edit .env so VITE_LICHESS_CLIENT_ID matches your domain.
+docker compose --env-file .env up -d --build
 ```
 
-Caddy will request and renew the TLS certificate automatically. The app will be available at:
+Then add a reverse proxy entry to your existing host Caddy config:
+
+```caddyfile
+chesscam.example.com {
+  encode zstd gzip
+  reverse_proxy 127.0.0.1:8001
+}
+```
+
+Reload Caddy after changing its config. The app will be available at:
 
 ```text
 https://chesscam.example.com
@@ -83,13 +91,7 @@ https://chesscam.example.com
 
 ```bash
 git pull
-docker compose --profile tls up -d --build
-```
-
-If you are not using the Caddy profile, use:
-
-```bash
-docker compose up -d --build
+docker compose --env-file .env up -d --build
 ```
 
 ## Operational Notes
